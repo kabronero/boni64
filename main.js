@@ -447,7 +447,7 @@ const sfxVols = {};
     const a = new Audio('./step.mp3');
     a.preload = 'auto';
     sfx[`step${i}`] = a;
-    sfxVols[`step${i}`] = 0.27;
+    sfxVols[`step${i}`] = 0.12;
   }
 }
 function playSound(name) {
