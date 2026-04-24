@@ -1012,23 +1012,16 @@ function minimapDraw() {
   const dest = levelState.data.destination;
   const city = levelState.data.cityMeta;
 
-  // Player-aligned: rotate the whole map so Boni's forward is "up" on canvas.
-  // Arrow stays upright in the center; streets and destination rotate around.
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(character.facing);
-
-  // City block rects in character-relative coords. (dx, -dz) maps world +Z to
-  // canvas up (-y).
+  // GTA-style world-aligned map: north up, character-centered.
+  // World +X = canvas right, world +Z = canvas up (so we invert Z when mapping).
   if (city) {
     ctx.fillStyle = 'rgba(90,150,110,0.85)';
-    const half = Math.max(w, h);
     for (const bl of city.blocks) {
-      const dx = (bl.x - bx) * s;
-      const dz = (bl.z - bz) * s;
-      if (Math.abs(dx) > half || Math.abs(dz) > half) continue;
+      const px = cx + (bl.x - bx) * s;
+      const py = cy - (bl.z - bz) * s;
       const hs = (bl.size / 2) * s;
-      ctx.fillRect(dx - hs, -dz - hs, hs * 2, hs * 2);
+      if (px + hs < 0 || px - hs > w || py + hs < 0 || py - hs > h) continue;
+      ctx.fillRect(px - hs, py - hs, hs * 2, hs * 2);
     }
   }
 
@@ -1036,23 +1029,27 @@ function minimapDraw() {
   if (dest) {
     minimap.pulse = (minimap.pulse + 0.08) % (Math.PI * 2);
     const pulseScale = 1 + Math.sin(minimap.pulse) * 0.3;
-    const ddx = (dest.x - bx) * s;
-    const ddz = (dest.z - bz) * s;
+    const dx = cx + (dest.x - bx) * s;
+    const dy = cy - (dest.z - bz) * s;
     ctx.strokeStyle = 'rgba(150,255,150,0.75)';
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(ddx, -ddz); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(dx, dy); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = '#7fff7f';
-    ctx.beginPath(); ctx.arc(ddx, -ddz, 5 * pulseScale, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(dx, dy, 5 * pulseScale, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(127,255,127,0.5)';
-    ctx.beginPath(); ctx.arc(ddx, -ddz, 10 * pulseScale, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(dx, dy, 10 * pulseScale, 0, Math.PI * 2); ctx.stroke();
   }
-  ctx.restore();
 
-  // Boni arrow: always points up because we rotated the map instead.
+  // Boni arrow rotates to match his world facing.
+  // character.facing is measured CW from +Z world. Canvas rotate(+θ) rotates
+  // the frame CCW in math terms but CW visually (y-down). We need the tip to
+  // follow the character's facing in world coordinates as drawn on a north-up
+  // canvas. That turns out to be rotate(-facing).
   ctx.save();
   ctx.translate(cx, cy);
+  ctx.rotate(-character.facing);
   ctx.fillStyle = '#ff4040';
   ctx.strokeStyle = '#ffcccc';
   ctx.lineWidth = 1.5;
