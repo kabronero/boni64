@@ -709,6 +709,8 @@ document.getElementById('boni-start').addEventListener('click', () => {
   startMusic();
 });
 
+initMobileControls();
+
 document.getElementById('splash-start').addEventListener('click', () => {
   hideSplashModal();
   if (splashTarget === 'cocacola') loadLevel(cocaColaLevel);
@@ -1694,12 +1696,134 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 
+// ============================================================
+// Mobile touch controls (virtual sticks + action buttons)
+// ============================================================
+
+const mobile = {
+  left:  { active: false, id: null, cx: 0, cy: 0, dx: 0, dy: 0, radius: 55 },
+  right: { active: false, id: null, cx: 0, cy: 0, dx: 0, dy: 0, radius: 55 },
+  btnJump: false,
+  btnRun: false,
+  isTouch: false,
+};
+
+function initMobileControls() {
+  mobile.isTouch = matchMedia('(hover: none) and (pointer: coarse)').matches;
+
+  const setupStick = (elId, stickState) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const nub = el.querySelector('.nub');
+    const onStart = (e) => {
+      if (stickState.active) return;
+      const t = e.changedTouches[0];
+      const rect = el.getBoundingClientRect();
+      stickState.cx = rect.left + rect.width / 2;
+      stickState.cy = rect.top + rect.height / 2;
+      stickState.radius = rect.width / 2 - 12;
+      stickState.id = t.identifier;
+      stickState.active = true;
+      moveStick(stickState, nub, t.clientX, t.clientY);
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (!stickState.active) return;
+      for (const t of e.changedTouches) {
+        if (t.identifier === stickState.id) {
+          moveStick(stickState, nub, t.clientX, t.clientY);
+          e.preventDefault();
+          break;
+        }
+      }
+    };
+    const onEnd = (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === stickState.id) {
+          stickState.active = false;
+          stickState.id = null;
+          stickState.dx = 0;
+          stickState.dy = 0;
+          nub.style.transform = '';
+          e.preventDefault();
+          break;
+        }
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: false });
+    // Move/end are tracked on the whole document so the thumb can drag outside the pad
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd, { passive: false });
+    document.addEventListener('touchcancel', onEnd, { passive: false });
+  };
+
+  const moveStick = (s, nub, cx, cy) => {
+    let dx = cx - s.cx;
+    let dy = cy - s.cy;
+    const r = s.radius;
+    const mag = Math.hypot(dx, dy);
+    if (mag > r) { dx = dx / mag * r; dy = dy / mag * r; }
+    s.dx = dx / r;
+    s.dy = dy / r;
+    nub.style.transform = `translate(${dx}px, ${dy}px)`;
+  };
+
+  setupStick('mstick-left', mobile.left);
+  setupStick('mstick-right', mobile.right);
+
+  // Action buttons: hold-style for jump/run, tap for action/pause/mute
+  const setupButton = (id, onDown, onUp) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const start = (e) => { el.classList.add('pressed'); onDown?.(); e.preventDefault(); };
+    const end = (e) => { el.classList.remove('pressed'); onUp?.(); e.preventDefault(); };
+    el.addEventListener('touchstart', start, { passive: false });
+    el.addEventListener('touchend', end, { passive: false });
+    el.addEventListener('touchcancel', end, { passive: false });
+  };
+  setupButton('mbtn-jump',
+    () => { mobile.btnJump = true; keys.add('Space'); },
+    () => { mobile.btnJump = false; keys.delete('Space'); });
+  setupButton('mbtn-run',
+    () => { mobile.btnRun = true; keys.add('ShiftLeft'); },
+    () => { mobile.btnRun = false; keys.delete('ShiftLeft'); });
+  setupButton('mbtn-action',
+    () => {
+      if (levelState.current === 'android' && typeof throwPhone === 'function') {
+        throwPhone();
+      } else {
+        // Trigger any action bound to E (e.g. dance via R, nothing for plain E)
+        for (const [idx, k] of Object.entries(mapping.keys)) {
+          if (k === 'E') triggerOneShot(Number(idx));
+        }
+      }
+    }, null);
+  setupButton('mbtn-pause',
+    () => {
+      if (paused) hidePauseModal();
+      else showPauseModal();
+    }, null);
+  setupButton('mbtn-mute',
+    () => {
+      setMuted(!isMuted);
+      flashNote(isMuted ? 'muted' : 'unmuted');
+    }, null);
+}
+
 function readInput() {
   let f = 0, r = 0;
   if (keys.has('KeyW') || keys.has('ArrowUp')) f += 1;
   if (keys.has('KeyS') || keys.has('ArrowDown')) f -= 1;
   if (keys.has('KeyD') || keys.has('ArrowRight')) r += 1;
   if (keys.has('KeyA') || keys.has('ArrowLeft')) r -= 1;
+  // Mobile left stick: up = forward (negative y on screen)
+  if (mobile.left.active) {
+    f += -mobile.left.dy;
+    r += mobile.left.dx;
+  }
+  // Clamp to unit range
+  if (f > 1) f = 1; if (f < -1) f = -1;
+  if (r > 1) r = 1; if (r < -1) r = -1;
   input.forward = f;
   input.right = r;
   input.jump = keys.has('Space');
@@ -2465,6 +2589,15 @@ function tick(now) {
   // so the character stays under our physics-driven transform.
   if (character.rootBone) {
     character.rootBone.position.set(0, 0, 0);
+  }
+
+  // --- Mobile right stick -> camera rotation ---
+  if (mobile.right.active) {
+    const yawSpeed = 2.6;   // rad/s at full deflection
+    const pitchSpeed = 1.8;
+    camRig.yaw -= mobile.right.dx * yawSpeed * dt;
+    camRig.pitch -= mobile.right.dy * pitchSpeed * dt;
+    camRig.pitch = Math.max(camRig.minPitch, Math.min(camRig.maxPitch, camRig.pitch));
   }
 
   // --- Sun follows character so the shadow frustum stays tight ---
