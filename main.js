@@ -807,10 +807,12 @@ function updatePhoneInHand() {
   phone.mesh.position.copy(p);
   phone.mesh.quaternion.copy(q);
   // Small offset so the phone sits in the palm area
-  // The R_Hand bone's local +Y typically points down the palm, so offset
-  // the phone downward in hand-space and tilt it so the screen faces outward.
-  phone.mesh.translateY(-0.45);
-  phone.mesh.translateZ(0.1);
+  // Sit in the palm: offset slightly along the bone's length + inward,
+  // then rotate so the phone sits flat (screen up toward the camera side).
+  phone.mesh.translateY(-0.18);
+  phone.mesh.translateX(0.08);
+  phone.mesh.translateZ(0.05);
+  phone.mesh.rotateZ(Math.PI / 2);
   phone.mesh.rotateX(Math.PI / 2);
 }
 
@@ -1014,7 +1016,7 @@ function minimapDraw() {
   // Arrow stays upright in the center; streets and destination rotate around.
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate(-character.facing);
+  ctx.rotate(character.facing);
 
   // City block rects in character-relative coords. (dx, -dz) maps world +Z to
   // canvas up (-y).
