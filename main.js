@@ -688,9 +688,6 @@ function hidePauseModal() {
   paused = false;
   document.getElementById('pause-modal').classList.remove('show');
 }
-// Minimap canvas is in the DOM; cache refs once.
-minimapInit();
-
 document.getElementById('pause-continue').addEventListener('click', () => {
   hidePauseModal();
   try { renderer.domElement.requestPointerLock(); } catch {}
@@ -958,11 +955,13 @@ const minimap = {
   pulse: 0,
 };
 function minimapInit() {
+  if (minimap.canvas) return; // already initialised
   minimap.canvas = document.getElementById('minimap');
-  minimap.ctx = minimap.canvas.getContext('2d');
+  if (minimap.canvas) minimap.ctx = minimap.canvas.getContext('2d');
   minimap.label = document.getElementById('minimap-label');
 }
 function minimapSetVisible(v) {
+  minimapInit();
   minimap.show = v;
   if (minimap.canvas) minimap.canvas.classList.toggle('show', v);
   if (minimap.label) minimap.label.classList.toggle('show', v);
