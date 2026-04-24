@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>boni64</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0b0f14; color: #e6edf3; font-family: system-ui, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+
+  #hud {
+    position: fixed; top: 12px; left: 12px;
+    padding: 10px 12px; background: rgba(0,0,0,.55);
+    border-radius: 8px; font-size: 13px; line-height: 1.45;
+    pointer-events: none; user-select: none;
+  }
+  #hud b { color: #7fd3ff; }
+  #hud .state { color: #b5f7a6; }
+
+  #score-hud {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    padding: 8px 18px; background: rgba(0,0,0,.6);
+    border: 1px solid rgba(255,165,0,.6); border-radius: 8px;
+    font-size: 20px; font-weight: bold; color: #ffcc4a;
+    pointer-events: none; user-select: none; display: none;
+    letter-spacing: 0.05em;
+  }
+
+  #banner {
+    position: fixed; top: 28%; left: 50%; transform: translate(-50%, 0);
+    padding: 14px 26px; background: rgba(0,0,0,.75);
+    border: 1px solid rgba(0,232,255,.6); border-radius: 10px;
+    font-size: 22px; font-weight: bold; color: #7fd3ff;
+    pointer-events: none; user-select: none;
+    opacity: 0; transition: opacity .25s;
+    text-align: center;
+  }
+  #banner.show { opacity: 1; }
+
+  .modal {
+    position: fixed; inset: 0; z-index: 20;
+    display: none; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 50%, rgba(0,0,0,.82), rgba(0,0,0,.95));
+    font-family: ui-monospace, 'Courier New', monospace;
+  }
+  .modal.show { display: flex; }
+  .modal .panel {
+    background: #060a10;
+    border: 3px solid #00e8ff;
+    border-radius: 6px;
+    box-shadow: 0 0 40px rgba(0,232,255,.55), inset 0 0 20px rgba(0,232,255,.12);
+    padding: 30px 44px;
+    min-width: 440px;
+    max-width: 640px;
+    text-align: center;
+    color: #e6edf3;
+  }
+  .modal h1 {
+    font-size: 30px; margin: 0 0 14px;
+    color: #ffcc4a; letter-spacing: 0.12em; line-height: 1.18;
+    text-shadow: 0 0 14px rgba(255,204,74,.7);
+  }
+  .modal p {
+    font-size: 14px; line-height: 1.6;
+    color: #9aa8b3; margin: 0 0 22px; letter-spacing: 0.05em;
+  }
+  .modal .btn {
+    display: inline-block;
+    background: transparent;
+    color: #7fd3ff;
+    border: 2px solid #7fd3ff;
+    padding: 10px 26px;
+    font-family: inherit; font-size: 15px;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    margin: 4px 5px;
+    text-transform: uppercase;
+  }
+  .modal .btn:hover { background: rgba(127,211,255,.15); }
+  .modal .btn.primary {
+    color: #0a0e14;
+    background: #ffcc4a;
+    border-color: #ffcc4a;
+    box-shadow: 0 0 18px rgba(255,204,74,.55);
+    font-weight: bold;
+  }
+  .modal .btn.primary:hover { background: #ffd66a; }
+  .modal h3 {
+    color: #7fd3ff; font-size: 14px;
+    letter-spacing: 0.24em; margin: 20px 0 10px;
+  }
+  #scoreboard-list {
+    list-style: none; padding: 0; margin: 0 0 16px;
+    text-align: left; max-height: 220px; overflow: auto;
+    font-size: 14px;
+  }
+  #scoreboard-list li {
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: grid; grid-template-columns: 28px 1fr auto auto;
+    gap: 8px; align-items: center;
+  }
+  #scoreboard-list li .rk { color: #7fd3ff; opacity: 0.7; }
+  #scoreboard-list li .nm { color: #ffcc4a; letter-spacing: 0.05em; }
+  #scoreboard-list li .sc { color: #e6edf3; }
+  #scoreboard-list li .tm { color: #9aa8b3; font-size: 12px; }
+  #scoreboard-list li.me {
+    background: rgba(255,204,74,.12);
+    border-left: 3px solid #ffcc4a;
+  }
+  #end-name-input { margin: 12px 0 18px; }
+  #name-field {
+    background: transparent;
+    color: #ffcc4a;
+    border: 2px solid #ffcc4a;
+    padding: 9px 14px;
+    font-family: inherit; font-size: 15px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    width: 220px; text-align: center;
+    margin-right: 6px;
+  }
+  #name-field::placeholder { color: rgba(255,204,74,.4); }
+  #end-result-detail { color: #e6edf3; font-size: 16px; margin-bottom: 8px; }
+
+  /* BONI 64 opening splash — minimalist retro */
+  #boni-splash .panel {
+    border-color: #00e8ff;
+    box-shadow: 0 0 60px rgba(0,232,255,.5), inset 0 0 30px rgba(0,232,255,.1);
+    padding: 60px 80px;
+    background: #05080f;
+  }
+  #boni-splash .boni-title {
+    font-family: 'Press Start 2P', ui-monospace, monospace;
+    font-size: 72px;
+    color: #00e8ff;
+    letter-spacing: 0.1em;
+    margin: 0 0 50px;
+    text-shadow:
+      0 0 14px rgba(0,232,255,.9),
+      0 0 30px rgba(0,232,255,.5);
+    line-height: 1;
+  }
+  #boni-splash .boni-subtitle {
+    font-family: 'Press Start 2P', ui-monospace, monospace;
+    font-size: 11px;
+    color: #9aa8b3;
+    margin: -34px 0 50px;
+    letter-spacing: 0.1em;
+  }
+  #boni-splash .btn {
+    font-family: 'Press Start 2P', ui-monospace, monospace;
+    font-size: 14px;
+    padding: 14px 32px;
+  }
+
+  #click-to-play {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.55); z-index: 2; cursor: pointer;
+    font-size: 18px; text-align: center;
+  }
+  #click-to-play.hidden { display: none; }
+
+  #dev {
+    position: fixed; top: 12px; right: 12px; width: 320px;
+    max-height: calc(100vh - 24px); overflow: auto;
+    background: rgba(0,0,0,.7); border-radius: 8px;
+    padding: 10px 12px; font-size: 12px; z-index: 10;
+    display: none;
+  }
+  #dev.open { display: block; }
+  #dev h3 { margin: 0 0 6px; font-size: 13px; color: #7fd3ff; }
+  #dev .hint { color: #9aa8b3; margin-bottom: 8px; }
+  #dev .row {
+    display: grid; grid-template-columns: 26px 1fr 90px 44px; gap: 6px;
+    align-items: center; padding: 3px 0;
+    border-top: 1px solid rgba(255,255,255,.06);
+  }
+  #dev input.key {
+    background: #1a2634; color: #e6edf3; border: 1px solid #2a3a4a;
+    border-radius: 4px; padding: 2px 4px; width: 100%; text-align: center;
+    font-family: ui-monospace, Menlo, monospace; text-transform: uppercase;
+  }
+  #dev .row:first-of-type { border-top: 0; }
+  #dev .idx { color: #9aa8b3; text-align: right; }
+  #dev button.preview {
+    background: #1a2634; color: #e6edf3; border: 1px solid #2a3a4a;
+    border-radius: 4px; padding: 2px 6px; cursor: pointer;
+    text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #dev button.preview.active { background: #2d4a6b; border-color: #4a7fbf; }
+  #dev select {
+    background: #1a2634; color: #e6edf3; border: 1px solid #2a3a4a;
+    border-radius: 4px; padding: 2px 4px;
+  }
+  #dev .footer {
+    margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,.08);
+    display: flex; gap: 6px;
+  }
+  #dev .footer button {
+    flex: 1; background: #1a2634; color: #e6edf3; border: 1px solid #2a3a4a;
+    border-radius: 4px; padding: 4px 6px; cursor: pointer;
+  }
+  #dev .footer button.primary { background: #2d4a6b; border-color: #4a7fbf; }
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="hud">
+    <div><b>WASD</b> mover · <b>Shift</b> correr · <b>Space</b> saltar · <b>Mouse</b> cámara · <b>Scroll</b> zoom · <b>Esc</b> liberar mouse</div>
+    <div>acciones: <b>E</b> hit · <b>R</b> dance · <b>M</b> mute</div>
+    <div>estado: <span class="state" id="state-label">idle</span> · fps: <span id="fps">–</span></div>
+  </div>
+
+  <div id="score-hud"></div>
+  <div id="banner"></div>
+  <div id="click-to-play">Click para jugar</div>
+
+  <div id="boni-splash" class="modal show">
+    <div class="panel">
+      <h1 class="boni-title">BONI 64</h1>
+      <button class="btn primary" id="boni-start">COMENZAR</button>
+    </div>
+  </div>
+
+  <div id="splash-modal" class="modal">
+    <div class="panel">
+      <h1>DAME MI GALLETITA<br>Y ME VOY</h1>
+      <p>agarrá todas las galletitas antes<br>que se acabe el tiempo</p>
+      <button class="btn primary" id="splash-start">START</button>
+      <button class="btn" id="splash-back">al hub</button>
+    </div>
+  </div>
+
+  <div id="end-modal" class="modal">
+    <div class="panel">
+      <h1 id="end-title">GANASTE</h1>
+      <div id="end-result-detail"></div>
+      <div id="end-name-input">
+        <input id="name-field" placeholder="tu nombre" maxlength="16" />
+        <button class="btn primary" id="save-score">guardar</button>
+      </div>
+      <h3>TOP 10</h3>
+      <ol id="scoreboard-list"></ol>
+      <div>
+        <button class="btn primary" id="end-restart">otra vez</button>
+        <button class="btn" id="end-hub">al hub</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dev">
+    <h3>Mapeo de animaciones</h3>
+    <div class="hint">
+      Columna 1: click para <b>previsualizar</b>.<br>
+      Columna 2: <b>estado</b> del juego (opcional).<br>
+      Columna 3: <b>tecla</b> para disparar como acción (una letra, opcional).<br>
+      No hace falta asignar todas.
+    </div>
+    <div id="dev-rows"></div>
+    <div class="footer">
+      <button id="dev-stop">Stop preview</button>
+      <button id="dev-save" class="primary">Guardar</button>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

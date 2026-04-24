@@ -1,0 +1,13 @@
+{
+  "name": "boni64",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "3D minigame hub with a TRON aesthetic, built with Three.js.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  }
+}
