@@ -105,6 +105,9 @@ function clearLevel() {
   levelState.pickups.length = 0;
   levelState.triggers.length = 0;
   levelState.data = {};
+  // Android-specific cleanup (safe no-ops if not in that level)
+  if (typeof cleanupPhoneAll === 'function') cleanupPhoneAll();
+  if (typeof minimapSetVisible === 'function') minimapSetVisible(false);
 }
 
 let currentLevelFactory = null;
@@ -629,6 +632,11 @@ function showSplashModal(game) {
     h1.style.color = '#ff4a4a';
     h1.style.textShadow = '0 0 14px rgba(255,74,74,.7)';
     p.textContent = 'encontrá la lata y la botella lo antes posible';
+  } else if (game === 'android') {
+    h1.innerHTML = 'ANDRÓID ES<br>UNA MIERDA';
+    h1.style.color = '#7aff88';
+    h1.style.textShadow = '0 0 14px rgba(122,255,136,.7)';
+    p.innerHTML = 'boni quiere volver al hotel desde el bar.<br>el GPS dice que es por acá. spoiler: no.<br><b>E</b> para tirar el celular · <b>P</b> para pausar';
   } else {
     h1.innerHTML = 'DAME MI GALLETITA<br>Y ME VOY';
     h1.style.color = '#ffcc4a';
@@ -669,6 +677,30 @@ function hideEndModal() {
 }
 
 // Wire up buttons once (after DOM is ready — this script is type=module at end)
+// --- Pause modal ---
+let paused = false;
+function showPauseModal() {
+  paused = true;
+  document.getElementById('pause-modal').classList.add('show');
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+function hidePauseModal() {
+  paused = false;
+  document.getElementById('pause-modal').classList.remove('show');
+}
+// Minimap canvas is in the DOM; cache refs once.
+minimapInit();
+
+document.getElementById('pause-continue').addEventListener('click', () => {
+  hidePauseModal();
+  try { renderer.domElement.requestPointerLock(); } catch {}
+});
+document.getElementById('pause-hub').addEventListener('click', () => {
+  hidePauseModal();
+  loadLevel(hubLevel);
+  try { renderer.domElement.requestPointerLock(); } catch {}
+});
+
 function reacquireLock() {
   // Called inside user-gesture handlers so requestPointerLock succeeds.
   try { renderer.domElement.requestPointerLock(); } catch {}
@@ -683,6 +715,7 @@ document.getElementById('boni-start').addEventListener('click', () => {
 document.getElementById('splash-start').addEventListener('click', () => {
   hideSplashModal();
   if (splashTarget === 'cocacola') loadLevel(cocaColaLevel);
+  else if (splashTarget === 'android') loadLevel(androidExperience);
   else loadLevel(cookieMazeLevel);
   reacquireLock();
 });
@@ -725,6 +758,417 @@ document.getElementById('end-hub').addEventListener('click', () => {
 // Levels: hub + cookieMaze
 // ============================================================
 
+// ============================================================
+// Andróid es una mierda — narrative GPS-deception experience
+// ============================================================
+
+// Phone mesh: dark body with a green glowing "screen". Kept small; we
+// position/rotate it each frame to match the right hand bone (world-space)
+// so we don't have to fight the model's scale hierarchy.
+function makePhoneMesh() {
+  const g = new THREE.Group();
+  g.userData.isPhone = true;
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.16, 0.018),
+    new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.35, metalness: 0.55 })
+  );
+  g.add(body);
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.07, 0.13),
+    new THREE.MeshStandardMaterial({
+      color: 0x0a3a10, emissive: 0x3dff55, emissiveIntensity: 1.5,
+      roughness: 0.6,
+    })
+  );
+  screen.position.z = 0.01;
+  g.add(screen);
+  return g;
+}
+
+// Throw state + particles for phone shatter
+const phone = {
+  mesh: null,       // the phone currently in hand
+  inHand: true,
+  flying: null,     // { mesh, vel, angVel } when mid-flight
+  respawnAt: 0,     // timestamp to spawn a new phone
+  particles: [],    // [{ mesh, vel, angVel, lifeLeft }]
+};
+
+function attachPhoneToHand() {
+  if (!character.rHandBone) return;
+  phone.mesh = makePhoneMesh();
+  phone.inHand = true;
+  scene.add(phone.mesh);
+}
+
+function updatePhoneInHand() {
+  if (!phone.mesh || !phone.inHand || !character.rHandBone) return;
+  const p = new THREE.Vector3();
+  const q = new THREE.Quaternion();
+  character.rHandBone.getWorldPosition(p);
+  character.rHandBone.getWorldQuaternion(q);
+  phone.mesh.position.copy(p);
+  phone.mesh.quaternion.copy(q);
+  // Small offset so the phone sits in the palm area
+  phone.mesh.translateY(-0.05);
+  phone.mesh.translateZ(0.03);
+}
+
+function throwPhone() {
+  if (!phone.mesh || !phone.inHand) return;
+  // The phone leaves the hand with roughly camera-forward velocity
+  const forward = new THREE.Vector3(
+    Math.sin(character.facing), 0.35, Math.cos(character.facing)
+  ).normalize();
+  const speed = 18;
+  phone.flying = {
+    mesh: phone.mesh,
+    vel: forward.multiplyScalar(speed),
+    angVel: new THREE.Vector3(
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20,
+    ),
+  };
+  phone.inHand = false;
+  phone.mesh = null;
+  // New phone in hand after a short beat
+  phone.respawnAt = performance.now() + 1500;
+  if (levelState.data) levelState.data.phonesThrown = (levelState.data.phonesThrown || 0) + 1;
+}
+
+function shatterPhoneAt(pos) {
+  // Kill the flying phone and spawn a small burst
+  if (phone.flying) {
+    scene.remove(phone.flying.mesh);
+    disposeObject3D(phone.flying.mesh);
+    phone.flying = null;
+  }
+  const shardMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0a0a, emissive: 0x3dff55, emissiveIntensity: 0.8,
+    roughness: 0.4, metalness: 0.3,
+  });
+  for (let i = 0; i < 10; i++) {
+    const s = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), shardMat);
+    s.position.copy(pos);
+    const vel = new THREE.Vector3(
+      (Math.random() - 0.5) * 6,
+      Math.random() * 5 + 2,
+      (Math.random() - 0.5) * 6,
+    );
+    const angVel = new THREE.Vector3(
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 20,
+    );
+    scene.add(s);
+    phone.particles.push({ mesh: s, vel, angVel, lifeLeft: 1.5 });
+  }
+}
+
+function updatePhonePhysics(dt) {
+  // Flying phone
+  if (phone.flying) {
+    const f = phone.flying;
+    f.vel.y += -22 * dt; // gravity
+    f.mesh.position.addScaledVector(f.vel, dt);
+    f.mesh.rotation.x += f.angVel.x * dt;
+    f.mesh.rotation.y += f.angVel.y * dt;
+    f.mesh.rotation.z += f.angVel.z * dt;
+    // Hit ground?
+    if (f.mesh.position.y <= 0.05) {
+      shatterPhoneAt(f.mesh.position.clone().setY(0.1));
+    } else {
+      // Hit a wall?
+      for (const w of levelState.walls) {
+        const b = w.aabb;
+        const p = f.mesh.position;
+        if (p.x > b.min.x && p.x < b.max.x &&
+            p.z > b.min.z && p.z < b.max.z &&
+            p.y > b.min.y && p.y < b.max.y) {
+          shatterPhoneAt(p.clone());
+          break;
+        }
+      }
+    }
+  }
+  // Particles
+  for (let i = phone.particles.length - 1; i >= 0; i--) {
+    const p = phone.particles[i];
+    p.vel.y += -10 * dt;
+    p.mesh.position.addScaledVector(p.vel, dt);
+    p.mesh.rotation.x += p.angVel.x * dt;
+    p.mesh.rotation.y += p.angVel.y * dt;
+    p.mesh.rotation.z += p.angVel.z * dt;
+    p.lifeLeft -= dt;
+    if (p.lifeLeft <= 0 || p.mesh.position.y < -2) {
+      scene.remove(p.mesh);
+      disposeObject3D(p.mesh);
+      phone.particles.splice(i, 1);
+    }
+  }
+  // Respawn phone in hand
+  if (!phone.inHand && !phone.flying && phone.respawnAt && performance.now() >= phone.respawnAt) {
+    attachPhoneToHand();
+    phone.respawnAt = 0;
+  }
+}
+
+function cleanupPhoneAll() {
+  if (phone.mesh) { scene.remove(phone.mesh); disposeObject3D(phone.mesh); phone.mesh = null; }
+  if (phone.flying) {
+    scene.remove(phone.flying.mesh); disposeObject3D(phone.flying.mesh); phone.flying = null;
+  }
+  for (const p of phone.particles) {
+    scene.remove(p.mesh); disposeObject3D(p.mesh);
+  }
+  phone.particles = [];
+  phone.inHand = false;
+  phone.respawnAt = 0;
+}
+
+// GPS destination marker: a tall pillar of light at a city intersection.
+function gpsMarker(x, z, color = 0x7aff88) {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.4, 0.4, 60, 12),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false })
+  );
+  pole.position.y = 30;
+  g.add(pole);
+  const base = new THREE.Mesh(
+    new THREE.RingGeometry(1, 2, 20),
+    new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.8 })
+  );
+  base.rotation.x = -Math.PI / 2;
+  base.position.y = 0.03;
+  g.add(base);
+  g.position.set(x, 0, z);
+  return g;
+}
+
+// Minimap: top-down canvas in the corner. Shows city blocks, Boni, and the
+// GPS destination + route line. Distance counter updates too.
+const minimap = {
+  canvas: null,
+  ctx: null,
+  label: null,
+  show: false,
+  scale: 0.6, // pixels per world unit
+  pulse: 0,
+};
+function minimapInit() {
+  minimap.canvas = document.getElementById('minimap');
+  minimap.ctx = minimap.canvas.getContext('2d');
+  minimap.label = document.getElementById('minimap-label');
+}
+function minimapSetVisible(v) {
+  minimap.show = v;
+  if (minimap.canvas) minimap.canvas.classList.toggle('show', v);
+  if (minimap.label) minimap.label.classList.toggle('show', v);
+}
+function minimapDraw() {
+  if (!minimap.show || !minimap.ctx) return;
+  const ctx = minimap.ctx;
+  const w = minimap.canvas.width;
+  const h = minimap.canvas.height;
+  ctx.fillStyle = '#020604';
+  ctx.fillRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2;
+  const s = minimap.scale;
+  const bx = character.root.position.x;
+  const bz = character.root.position.z;
+  // Streets (light thin lines for block edges)
+  const city = levelState.data.cityMeta;
+  if (city) {
+    ctx.strokeStyle = 'rgba(40,120,60,0.45)';
+    ctx.lineWidth = 1;
+    const { origin, span, step } = city;
+    for (let i = 0; i <= span; i++) {
+      const worldX = origin + i * step;
+      const px = cx + (worldX - bx) * s;
+      if (px >= 0 && px <= w) {
+        ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+      }
+      const worldZ = origin + i * step;
+      const py = cy + (worldZ - bz) * s;
+      if (py >= 0 && py <= h) {
+        ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
+      }
+    }
+    // City blocks as dark rects
+    ctx.fillStyle = 'rgba(30,60,35,0.7)';
+    for (const bl of city.blocks) {
+      const px = cx + (bl.x - bx) * s;
+      const py = cy + (bl.z - bz) * s;
+      const hs = (bl.size / 2) * s;
+      if (px + hs < 0 || px - hs > w || py + hs < 0 || py - hs > h) continue;
+      ctx.fillRect(px - hs, py - hs, hs * 2, hs * 2);
+    }
+  }
+  // Destination with pulse
+  const dest = levelState.data.destination;
+  if (dest) {
+    minimap.pulse = (minimap.pulse + 0.08) % (Math.PI * 2);
+    const pulseScale = 1 + Math.sin(minimap.pulse) * 0.3;
+    const dx = cx + (dest.x - bx) * s;
+    const dy = cy + (dest.z - bz) * s;
+    // Route line
+    ctx.strokeStyle = 'rgba(120,255,120,0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(dx, dy); ctx.stroke();
+    ctx.setLineDash([]);
+    // Destination dot
+    ctx.fillStyle = '#7fff7f';
+    ctx.beginPath(); ctx.arc(dx, dy, 5 * pulseScale, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(127,255,127,0.5)';
+    ctx.beginPath(); ctx.arc(dx, dy, 10 * pulseScale, 0, Math.PI * 2); ctx.stroke();
+  }
+  // Boni triangle in center, rotating with facing
+  const ang = -character.facing;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(ang);
+  ctx.fillStyle = '#ff4040';
+  ctx.strokeStyle = '#ffcccc';
+  ctx.beginPath();
+  ctx.moveTo(0, -8);
+  ctx.lineTo(6, 6);
+  ctx.lineTo(-6, 6);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+  // Distance label
+  if (dest) {
+    const dist = Math.sqrt((dest.x - bx) ** 2 + (dest.z - bz) ** 2);
+    let shown = Math.ceil(dist);
+    if (levelState.data._fakeDistanceBoost) {
+      shown += Math.floor(levelState.data._fakeDistanceBoost);
+    }
+    minimap.label.textContent = `destino: ${shown} m`;
+  }
+}
+
+// The city generator: grid of block-buildings with streets between.
+function generateAndroidCity(group, state) {
+  // Block grid: each block is a tall building. Streets are the gaps between.
+  const blocks = 13;           // blocks per side (odd so there's a clear center)
+  const blockSize = 22;
+  const streetWidth = 12;
+  const step = blockSize + streetWidth;
+  const origin = -((blocks - 1) / 2) * step - blockSize / 2; // leftmost block edge
+  // Actually we want block CENTERS. Let me recompute:
+  const originCenter = -((blocks - 1) / 2) * step;
+  const blockList = [];
+  for (let ix = 0; ix < blocks; ix++) {
+    for (let iz = 0; iz < blocks; iz++) {
+      const x = originCenter + ix * step;
+      const z = originCenter + iz * step;
+      // Skip a cell at the grid center so there's an open "bar plaza" where we spawn.
+      if (ix === (blocks - 1) / 2 && iz === (blocks - 1) / 2) continue;
+      const h = 16 + Math.random() * 28;
+      const accent = Math.random();
+      let color = 0x2a6a40; // dim green (default)
+      if (accent < 0.2) color = 0x7aff88; // a few bright-green landmarks
+      else if (accent < 0.35) color = 0xff6a70;
+      else if (accent < 0.55) color = 0x4a8aff;
+      neonBox(group, state.walls, x, z, blockSize, h, color, true);
+      blockList.push({ x, z, size: blockSize });
+    }
+  }
+  return {
+    blocks: blockList,
+    step,
+    span: blocks,
+    origin: originCenter - step / 2, // for grid-line rendering
+    bounds: ((blocks - 1) / 2) * step + blockSize / 2, // half world extent
+  };
+}
+
+// Pick a random destination cell (somewhere far from the player).
+function pickDestinationCell(state) {
+  const city = state.data.cityMeta;
+  const bx = character.root.position.x;
+  const bz = character.root.position.z;
+  for (let a = 0; a < 30; a++) {
+    const b = city.blocks[(Math.random() * city.blocks.length) | 0];
+    // Place destination in the STREET adjacent to the block (so the player can
+    // actually reach it), e.g. next to the block's south face.
+    const side = Math.floor(Math.random() * 4);
+    const off = city.step / 2;
+    let x = b.x, z = b.z;
+    if (side === 0) z = b.z - off;
+    else if (side === 1) z = b.z + off;
+    else if (side === 2) x = b.x - off;
+    else x = b.x + off;
+    const dd = (x - bx) ** 2 + (z - bz) ** 2;
+    if (dd > 60 * 60 && dd < 180 * 180) return { x, z };
+  }
+  // fallback
+  return { x: 80, z: 80 };
+}
+
+function updateAndroidGps(state, dt) {
+  if (!state.data.destination) return;
+  const bx = character.root.position.x;
+  const bz = character.root.position.z;
+  const dest = state.data.destination;
+  const distSq = (dest.x - bx) ** 2 + (dest.z - bz) ** 2;
+  // If player got close: teleport the destination to a new far cell.
+  if (distSq < 8 * 8) {
+    state.data.destination = pickDestinationCell(state);
+    state.data.marker.position.set(state.data.destination.x, 0, state.data.destination.z);
+    state.data._deceptions = (state.data._deceptions || 0) + 1;
+    showBanner('el GPS recalcula...', 1400);
+  }
+  // Occasionally add a fake distance boost so the counter jumps up even when
+  // the player is closing in.
+  state.data._fakeCooldown = (state.data._fakeCooldown || 0) - dt;
+  if (state.data._fakeCooldown <= 0) {
+    state.data._fakeDistanceBoost = Math.floor(Math.random() * 40) + 10;
+    state.data._fakeCooldown = 8 + Math.random() * 8;
+  } else {
+    // Slowly decay the fake boost
+    state.data._fakeDistanceBoost = Math.max(0, (state.data._fakeDistanceBoost || 0) - dt * 4);
+  }
+}
+
+const androidExperience = {
+  name: 'android',
+  setup(group, state) {
+    state.config.title = 'ANDRÓID ES UNA MIERDA';
+    state.config.bgColor = 0x020608;
+    state.config.fogColor = 0x020608;
+    state.config.fogNear = 40;
+    state.config.fogFar = 180;
+    state.config.sunColor = 0x7aff88;
+    state.config.sunIntensity = 0.35;
+    state.config.hemiColor = 0x0a2418;
+    state.config.hemiIntensity = 0.5;
+    state.config.camDistance = 16;
+    state.config.camPitch = -0.28;
+    state.config.camHeightOffset = 3.6;
+    state.config.spawn.set(0, 0, 0);
+
+    groundPlane(group, 0x050a06);
+    neonGrid(group, 500, 100, 0x3aff66, 0x1a6020, 0.35);
+
+    state.data.cityMeta = generateAndroidCity(group, state);
+    state.data.phonesThrown = 0;
+    state.data._deceptions = 0;
+
+    // Pick an initial destination and create the pillar-of-light marker
+    const initial = pickDestinationCell(state);
+    state.data.destination = initial;
+    state.data.marker = gpsMarker(initial.x, initial.z, 0x7aff88);
+    group.add(state.data.marker);
+
+    minimapSetVisible(true);
+    attachPhoneToHand();
+  },
+};
+
 const hubLevel = {
   name: 'hub',
   setup(group, state) {
@@ -739,11 +1183,14 @@ const hubLevel = {
     groundPlane(group);
     neonGrid(group);
 
-    // Two big TRON buildings, separated so there's room between them
-    const bA = { x: -45, z: 40 };
-    const bB = { x:  45, z: 40 };
+    // Three TRON buildings in a row, evenly spaced
+    const bA = { x: -80, z: 40 };
+    const bC = { x:   0, z: 40 };
+    const bB = { x:  80, z: 40 };
     building(group, state, bA.x, bA.z, 50, 40, 32, 'dame mi galletita',
       () => showSplashModal('cookies'), 0xffa500);
+    building(group, state, bC.x, bC.z, 50, 40, 32, 'andróid es una mierda',
+      () => showSplashModal('android'), 0x7aff88);
     building(group, state, bB.x, bB.z, 50, 40, 32, 'coca con coca',
       () => showSplashModal('cocacola'), 0xff2a2a);
 
@@ -753,9 +1200,9 @@ const hubLevel = {
     //   - directly in front of / next to the buildings
     //   - the central corridor the player will walk through
     const spawnSafe = 18;
-    const buildingSafe = 32;
+    const buildingSafe = 34;
     const corridorX = 14;   // |x| < this is the approach corridor
-    const corridorZ = [-70, 22]; // z range of the corridor
+    const corridorZ = [-100, 22]; // z range of the corridor
     const palette = [0x00e8ff, 0xff3cf0, 0x7fff6a, 0xffa050];
     const scatter = 22;
     for (let i = 0; i < scatter; i++) {
@@ -766,6 +1213,7 @@ const hubLevel = {
         if (tx * tx + (tz + 90) * (tz + 90) < spawnSafe * spawnSafe) continue;
         if ((tx - bA.x) ** 2 + (tz - bA.z) ** 2 < buildingSafe * buildingSafe) continue;
         if ((tx - bB.x) ** 2 + (tz - bB.z) ** 2 < buildingSafe * buildingSafe) continue;
+        if ((tx - bC.x) ** 2 + (tz - bC.z) ** 2 < buildingSafe * buildingSafe) continue;
         if (Math.abs(tx) < corridorX && tz > corridorZ[0] && tz < corridorZ[1]) continue;
         x = tx; z = tz; ok = true; break;
       }
@@ -1146,6 +1594,22 @@ addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLElement && e.target.closest('#dev')) return;
   keys.add(e.code);
   if (e.code === 'Space') e.preventDefault();
+
+  // Global pause (P)
+  if (e.code === 'KeyP') {
+    if (paused) { hidePauseModal(); try { renderer.domElement.requestPointerLock(); } catch {} }
+    else showPauseModal();
+    return;
+  }
+
+  // Context-sensitive E action per level
+  if (e.code === 'KeyE') {
+    if (levelState.current === 'android' && typeof throwPhone === 'function') {
+      throwPhone();
+      return;
+    }
+  }
+
   // One-shot trigger: map KeyX -> 'X'
   const letter = e.code.startsWith('Key') ? e.code.slice(3) : null;
   if (letter) {
@@ -1262,6 +1726,7 @@ const character = {
   turnSpeed: 12,                      // how fast the character rotates to face movement
   rootBoneName: 'Root',               // to strip in-place root motion
   rootBone: null,                     // assigned after load
+  rHandBone: null,                    // assigned after load
   modelYawOffset: 0,                  // added to model rotation so its "front" faces +Z
   needsGroundAlign: true,             // re-measure bbox after first animated frame
   _stepAccum: -1,                     // footstep timer accumulator
@@ -1285,7 +1750,7 @@ const DEFAULT_MAPPING = {
     idle: 5, walk: 7, run: 0, jump: 9, land: 6,
     attack: 1, dance: 2, wave: 4, hit: 8,
   },
-  keys: { 2: 'R', 8: 'E' },
+  keys: { 2: 'R' }, // E is now a context-sensitive action key (per level)
 };
 const LS_KEY = 'boni64.animMapping';
 
@@ -1308,9 +1773,9 @@ function saveMapping(m) {
   localStorage.setItem(LS_KEY, JSON.stringify(m));
 }
 let mapping = loadMapping();
-// Migration: strip any key binding on F (wave action no longer exposed).
+// Migration: drop old 'F' and 'E' bindings; E is now a context action key.
 for (const idx of Object.keys(mapping.keys)) {
-  if (mapping.keys[idx] === 'F') delete mapping.keys[idx];
+  if (mapping.keys[idx] === 'F' || mapping.keys[idx] === 'E') delete mapping.keys[idx];
 }
 
 const anim = {
@@ -1618,6 +2083,9 @@ loader.load('./boni.glb', (gltf) => {
     if (o.isBone && o.name === character.rootBoneName) {
       character.rootBone = o;
     }
+    if (o.isBone && o.name === 'R_Hand') {
+      character.rHandBone = o;
+    }
   });
 
   character.root.add(model);
@@ -1687,8 +2155,11 @@ const tmpMove = new THREE.Vector3();
 
 function tick(now) {
   requestAnimationFrame(tick);
-  const dt = Math.min((now - lastT) / 1000, 0.05);
+  const dtRaw = (now - lastT) / 1000;
   lastT = now;
+  // When paused, skip simulation but keep rendering the frozen frame
+  if (paused) { renderer.render(scene, camera); return; }
+  const dt = Math.min(dtRaw, 0.05);
 
   readInput();
 
@@ -1836,6 +2307,14 @@ function tick(now) {
       levelState.data._lastSec = sec;
       updateScoreHUD();
     }
+  }
+
+  // --- Andróid experience: GPS + phone + minimap ---
+  if (levelState.current === 'android') {
+    updateAndroidGps(levelState, dt);
+    updatePhoneInHand();
+    updatePhonePhysics(dt);
+    minimapDraw();
   }
 
   // --- Coca con Coca timer tick (counts up) ---

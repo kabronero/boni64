@@ -126,6 +126,31 @@
   #name-field::placeholder { color: rgba(255,204,74,.4); }
   #end-result-detail { color: #e6edf3; font-size: 16px; margin-bottom: 8px; }
 
+  /* Minimap for the Android experience */
+  #minimap {
+    position: fixed; top: 12px; right: 12px;
+    border: 2px solid rgba(100, 255, 100, 0.8);
+    border-radius: 6px;
+    background: rgba(0, 8, 0, 0.8);
+    box-shadow: 0 0 16px rgba(100, 255, 100, 0.35);
+    display: none;
+    z-index: 4;
+  }
+  #minimap.show { display: block; }
+  #minimap-label {
+    position: fixed; top: 240px; right: 12px;
+    width: 220px; text-align: center;
+    font-family: ui-monospace, monospace; font-size: 14px;
+    font-weight: bold; color: #7fff7f;
+    background: rgba(0,8,0,0.75);
+    border: 1px solid rgba(100,255,100,0.6);
+    border-radius: 6px; padding: 6px 0;
+    letter-spacing: 0.05em; display: none;
+    z-index: 4;
+    text-shadow: 0 0 8px rgba(127,255,127,0.7);
+  }
+  #minimap-label.show { display: block; }
+
   /* BONI 64 opening splash — minimalist retro */
   #boni-splash .panel {
     border-color: #00e8ff;
@@ -220,13 +245,27 @@
 <body>
   <div id="hud">
     <div><b>WASD</b> mover · <b>Shift</b> correr · <b>Space</b> saltar · <b>Mouse</b> cámara · <b>Scroll</b> zoom · <b>Esc</b> liberar mouse</div>
-    <div>acciones: <b>E</b> hit · <b>R</b> dance · <b>M</b> mute</div>
+    <div>acciones: <b>E</b> acción · <b>R</b> dance · <b>M</b> mute · <b>P</b> pausa</div>
     <div>estado: <span class="state" id="state-label">idle</span> · fps: <span id="fps">–</span></div>
   </div>
 
   <div id="score-hud"></div>
   <div id="banner"></div>
   <div id="click-to-play">Click para jugar</div>
+
+  <div id="pause-modal" class="modal">
+    <div class="panel">
+      <h1>PAUSA</h1>
+      <div>
+        <button class="btn primary" id="pause-continue">continuar</button>
+        <button class="btn" id="pause-hub">salir al lobby</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Minimap for Android experience (canvas filled via JS) -->
+  <canvas id="minimap" width="220" height="220"></canvas>
+  <div id="minimap-label">destino: — m</div>
 
   <div id="boni-splash" class="modal show">
     <div class="panel">
