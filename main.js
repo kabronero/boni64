@@ -1042,24 +1042,12 @@ function minimapDraw() {
     ctx.beginPath(); ctx.arc(dx, dy, 10 * pulseScale, 0, Math.PI * 2); ctx.stroke();
   }
 
-  // Boni arrow rotates to match his world facing.
-  // character.facing is measured CW from +Z world. Canvas rotate(+θ) rotates
-  // the frame CCW in math terms but CW visually (y-down). We need the tip to
-  // follow the character's facing in world coordinates as drawn on a north-up
-  // canvas. That turns out to be rotate(-facing).
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(-character.facing);
+  // Boni as a simple red circle at center (no direction indicator — less
+  // confusing than a rotating arrow).
   ctx.fillStyle = '#ff4040';
-  ctx.strokeStyle = '#ffcccc';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(0, -10);
-  ctx.lineTo(7, 7);
-  ctx.lineTo(-7, 7);
-  ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  ctx.restore();
+  ctx.strokeStyle = '#ffd0d0';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
   // Distance label
   if (dest) {
