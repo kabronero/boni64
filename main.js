@@ -447,7 +447,7 @@ const sfxVols = {};
     const a = new Audio('./step.mp3');
     a.preload = 'auto';
     sfx[`step${i}`] = a;
-    sfxVols[`step${i}`] = 0.55;
+    sfxVols[`step${i}`] = 0.27;
   }
 }
 function playSound(name) {
@@ -1267,7 +1267,9 @@ const character = {
   _stepAccum: -1,                     // footstep timer accumulator
 };
 const LS_YAW_KEY = 'boni64.modelYawOffset';
-character.modelYawOffset = parseFloat(localStorage.getItem(LS_YAW_KEY) || '3.14159265') || Math.PI;
+// Default is 3π/2 (270°) — the rig's natural face points +X, so we rotate
+// the model so that +Z (the engine's "forward") matches the visual front.
+character.modelYawOffset = parseFloat(localStorage.getItem(LS_YAW_KEY) || '4.712388980384689') || (3 * Math.PI / 2);
 scene.add(character.root);
 
 // ============================================================
