@@ -2180,7 +2180,7 @@ function tick(now) {
   // --- Character movement ---
   // Horizontal move direction in camera-yaw space
   tmpForward.set(Math.sin(camRig.yaw), 0, Math.cos(camRig.yaw));
-  tmpRight.set(-tmpForward.z, 0, tmpForward.x);
+  tmpRight.set(tmpForward.z, 0, -tmpForward.x);
   tmpMove.set(0, 0, 0);
   tmpMove.addScaledVector(tmpForward, input.forward);
   tmpMove.addScaledVector(tmpRight, input.right);
