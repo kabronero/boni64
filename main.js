@@ -791,32 +791,42 @@ const phone = {
   particles: [],    // [{ mesh, vel, angVel, lifeLeft }]
 };
 
+// Attach the phone as a child of the hand bone so it moves & rotates with
+// the skeleton during animations. We counter the model's overall scale so
+// the phone keeps its world-space size, then position it in palm-local
+// coordinates with a few rotations to find a natural grip.
 function attachPhoneToHand() {
-  if (!character.rHandBone) return;
+  if (!character.rHandBone || !character.model) return;
   phone.mesh = makePhoneMesh();
   phone.inHand = true;
-  scene.add(phone.mesh);
+  character.rHandBone.add(phone.mesh);
+  const inv = 1 / Math.max(character.model.scale.x, 0.0001);
+  phone.mesh.scale.setScalar(inv);
+  // Local placement in the hand bone's frame:
+  //  - position: nudge along the bone toward the fingertips and a bit forward
+  //  - rotation: rotate so the phone's long axis runs along the arm and the
+  //    screen faces outward from the back of the hand.
+  phone.mesh.position.set(0, 0.18, 0.04);
+  phone.mesh.rotation.set(Math.PI / 2, 0, 0);
 }
 
 function updatePhoneInHand() {
-  if (!phone.mesh || !phone.inHand || !character.rHandBone) return;
-  const p = new THREE.Vector3();
-  const q = new THREE.Quaternion();
-  character.rHandBone.getWorldPosition(p);
-  character.rHandBone.getWorldQuaternion(q);
-  phone.mesh.position.copy(p);
-  phone.mesh.quaternion.copy(q);
-  // Small offset so the phone sits in the palm area
-  // Sit upright in the palm, long axis along the forearm.
-  // Offset in hand-local: further down the bone (palm/fingers area), a bit
-  // forward, almost no side offset. No extra rotations so the phone stays
-  // aligned with the hand (portrait-vertical).
-  phone.mesh.translateY(-0.35);
-  phone.mesh.translateZ(0.08);
+  // No-op: parented to the bone, the phone follows automatically.
 }
 
 function throwPhone() {
   if (!phone.mesh || !phone.inHand) return;
+  // Capture the phone's current world transform, then detach from the bone
+  // and re-add at world scale so it can be simulated as an independent body.
+  const wp = new THREE.Vector3();
+  const wq = new THREE.Quaternion();
+  phone.mesh.getWorldPosition(wp);
+  phone.mesh.getWorldQuaternion(wq);
+  if (phone.mesh.parent) phone.mesh.parent.remove(phone.mesh);
+  scene.add(phone.mesh);
+  phone.mesh.position.copy(wp);
+  phone.mesh.quaternion.copy(wq);
+  phone.mesh.scale.setScalar(1);
   // The phone leaves the hand with roughly camera-forward velocity
   const forward = new THREE.Vector3(
     Math.sin(character.facing), 0.35, Math.cos(character.facing)
