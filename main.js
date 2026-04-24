@@ -432,12 +432,22 @@ function updateScoreHUD() {
 
 // ---------- Audio ----------
 const sfx = {};
+const sfxVols = {};
 {
-  const names = ['damegalle', 'ricagalle', 'latafaltabotella', 'botellafaltalata', 'cocaconcoca'];
-  for (const n of names) {
+  const voice = ['damegalle', 'ricagalle', 'latafaltabotella', 'botellafaltalata', 'cocaconcoca'];
+  for (const n of voice) {
     const a = new Audio(`./${n}.mp3`);
     a.preload = 'auto';
     sfx[n] = a;
+    sfxVols[n] = 1;
+  }
+  // Step sounds: a small pool of clones so consecutive footsteps can overlap
+  // without cutting each other off.
+  for (let i = 0; i < 4; i++) {
+    const a = new Audio('./step.mp3');
+    a.preload = 'auto';
+    sfx[`step${i}`] = a;
+    sfxVols[`step${i}`] = 0.55;
   }
 }
 function playSound(name) {
@@ -447,6 +457,13 @@ function playSound(name) {
     a.currentTime = 0;
     a.play().catch(() => {}); // ignore autoplay-block / "aborted by new load" etc
   } catch {}
+}
+let _stepIdx = 0;
+function playStep() {
+  const a = sfx[`step${_stepIdx}`];
+  _stepIdx = (_stepIdx + 1) % 4;
+  if (!a) return;
+  try { a.currentTime = 0; a.play().catch(() => {}); } catch {}
 }
 
 // ---------- Chill procedural ambient music ----------
@@ -461,7 +478,7 @@ function setMuted(muted) {
   isMuted = muted;
   localStorage.setItem('boni64.muted', muted ? '1' : '0');
   if (music.master) music.master.gain.value = muted ? 0 : MUSIC_VOLUME;
-  for (const name in sfx) sfx[name].volume = muted ? 0 : 1;
+  for (const name in sfx) sfx[name].volume = muted ? 0 : (sfxVols[name] ?? 1);
 }
 
 function startMusic() {
@@ -482,7 +499,7 @@ function startMusic() {
   music.filter = filter;
   music.master = master;
   // Apply mute state to any preloaded sfx audios as well
-  for (const name in sfx) sfx[name].volume = isMuted ? 0 : 1;
+  for (const name in sfx) sfx[name].volume = isMuted ? 0 : (sfxVols[name] ?? 1);
 
   const playNoteAt = (freq, start, duration, type, vol) => {
     const osc = ctx.createOscillator();
@@ -1247,6 +1264,7 @@ const character = {
   rootBone: null,                     // assigned after load
   modelYawOffset: 0,                  // added to model rotation so its "front" faces +Z
   needsGroundAlign: true,             // re-measure bbox after first animated frame
+  _stepAccum: -1,                     // footstep timer accumulator
 };
 const LS_YAW_KEY = 'boni64.modelYawOffset';
 character.modelYawOffset = parseFloat(localStorage.getItem(LS_YAW_KEY) || '3.14159265') || Math.PI;
@@ -1781,6 +1799,24 @@ function tick(now) {
       desired = 'idle';
     }
     playState(desired);
+  }
+
+  // --- Footstep sfx ---
+  if (character.onGround && moving && !anim.oneShot && !anim.preview) {
+    const interval = input.run ? 0.28 : 0.46;
+    if (character._stepAccum < 0) {
+      // Just started moving — play an immediate step
+      playStep();
+      character._stepAccum = 0;
+    } else {
+      character._stepAccum += dt;
+      if (character._stepAccum >= interval) {
+        playStep();
+        character._stepAccum = 0;
+      }
+    }
+  } else {
+    character._stepAccum = -1; // flag: not moving
   }
 
   // --- Advance animation mixer ---
