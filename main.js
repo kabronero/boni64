@@ -1012,12 +1012,13 @@ function minimapDraw() {
   const dest = levelState.data.destination;
   const city = levelState.data.cityMeta;
 
-  // GTA-style world-aligned map: north up, character-centered.
-  // World +X = canvas right, world +Z = canvas up (so we invert Z when mapping).
+  // World-aligned map, character-centered. The X axis on-map is flipped
+  // relative to world X so the map matches the player's sense of "right"
+  // (since the world-frame movement uses a mirrored right vector).
   if (city) {
     ctx.fillStyle = 'rgba(90,150,110,0.85)';
     for (const bl of city.blocks) {
-      const px = cx + (bl.x - bx) * s;
+      const px = cx - (bl.x - bx) * s;
       const py = cy - (bl.z - bz) * s;
       const hs = (bl.size / 2) * s;
       if (px + hs < 0 || px - hs > w || py + hs < 0 || py - hs > h) continue;
@@ -1029,7 +1030,7 @@ function minimapDraw() {
   if (dest) {
     minimap.pulse = (minimap.pulse + 0.08) % (Math.PI * 2);
     const pulseScale = 1 + Math.sin(minimap.pulse) * 0.3;
-    const dx = cx + (dest.x - bx) * s;
+    const dx = cx - (dest.x - bx) * s;
     const dy = cy - (dest.z - bz) * s;
     ctx.strokeStyle = 'rgba(150,255,150,0.75)';
     ctx.lineWidth = 2;
@@ -2180,7 +2181,7 @@ function tick(now) {
   // --- Character movement ---
   // Horizontal move direction in camera-yaw space
   tmpForward.set(Math.sin(camRig.yaw), 0, Math.cos(camRig.yaw));
-  tmpRight.set(tmpForward.z, 0, -tmpForward.x);
+  tmpRight.set(-tmpForward.z, 0, tmpForward.x);
   tmpMove.set(0, 0, 0);
   tmpMove.addScaledVector(tmpForward, input.forward);
   tmpMove.addScaledVector(tmpRight, input.right);
