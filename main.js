@@ -791,42 +791,38 @@ const phone = {
   particles: [],    // [{ mesh, vel, angVel, lifeLeft }]
 };
 
-// Attach the phone as a child of the hand bone so it moves & rotates with
-// the skeleton during animations. We counter the model's overall scale so
-// the phone keeps its world-space size, then position it in palm-local
-// coordinates with a few rotations to find a natural grip.
 function attachPhoneToHand() {
-  if (!character.rHandBone || !character.model) return;
+  if (!character.rHandBone) return;
   phone.mesh = makePhoneMesh();
   phone.inHand = true;
-  character.rHandBone.add(phone.mesh);
-  const inv = 1 / Math.max(character.model.scale.x, 0.0001);
-  phone.mesh.scale.setScalar(inv);
-  // Local placement in the hand bone's frame:
-  //  - position: nudge along the bone toward the fingertips and a bit forward
-  //  - rotation: rotate so the phone's long axis runs along the arm and the
-  //    screen faces outward from the back of the hand.
-  phone.mesh.position.set(0, 0.18, 0.04);
-  phone.mesh.rotation.set(Math.PI / 2, 0, 0);
+  scene.add(phone.mesh);
+  phone.mesh.scale.setScalar(1);
 }
 
+// The phone sits at the right-hand bone's world position each frame, with
+// a small offset toward the character's forward direction and slight
+// downward offset so it ends up near the palm. Rotation matches the
+// character's facing so the phone is portrait & faces the same way as Boni.
+const _phoneTmpHand = new THREE.Vector3();
 function updatePhoneInHand() {
-  // No-op: parented to the bone, the phone follows automatically.
+  if (!phone.mesh || !phone.inHand || !character.rHandBone) return;
+  character.rHandBone.getWorldPosition(_phoneTmpHand);
+  // World-space positioning: place at the hand, drop a bit so it sits in the
+  // palm, and nudge slightly forward of the body so it isn't buried in the leg.
+  const f = character.facing;
+  const fx = Math.sin(f), fz = Math.cos(f);
+  phone.mesh.position.set(
+    _phoneTmpHand.x + fx * 0.18,
+    _phoneTmpHand.y - 0.05,
+    _phoneTmpHand.z + fz * 0.18,
+  );
+  // Portrait, oriented to face the same direction as Boni (so the screen
+  // faces forward and the long axis is vertical).
+  phone.mesh.rotation.set(0, f, 0);
 }
 
 function throwPhone() {
   if (!phone.mesh || !phone.inHand) return;
-  // Capture the phone's current world transform, then detach from the bone
-  // and re-add at world scale so it can be simulated as an independent body.
-  const wp = new THREE.Vector3();
-  const wq = new THREE.Quaternion();
-  phone.mesh.getWorldPosition(wp);
-  phone.mesh.getWorldQuaternion(wq);
-  if (phone.mesh.parent) phone.mesh.parent.remove(phone.mesh);
-  scene.add(phone.mesh);
-  phone.mesh.position.copy(wp);
-  phone.mesh.quaternion.copy(wq);
-  phone.mesh.scale.setScalar(1);
   // The phone leaves the hand with roughly camera-forward velocity
   const forward = new THREE.Vector3(
     Math.sin(character.facing), 0.35, Math.cos(character.facing)
