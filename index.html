@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>boni64</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -125,92 +125,6 @@
   }
   #name-field::placeholder { color: rgba(255,204,74,.4); }
   #end-result-detail { color: #e6edf3; font-size: 16px; margin-bottom: 8px; }
-
-  /* Mobile touch controls (hidden by default, shown on coarse-pointer devices) */
-  #mobile-controls { display: none; }
-  @media (hover: none) and (pointer: coarse) {
-    #mobile-controls { display: block; }
-    #click-to-play { display: none !important; }
-    body { touch-action: none; -webkit-user-select: none; user-select: none; }
-  }
-  .mstick {
-    position: fixed; bottom: 26px;
-    width: 130px; height: 130px;
-    border-radius: 50%;
-    background: rgba(0, 232, 255, 0.07);
-    border: 2px solid rgba(0, 232, 255, 0.55);
-    box-shadow: 0 0 18px rgba(0, 232, 255, 0.35), inset 0 0 12px rgba(0,232,255,0.08);
-    z-index: 15;
-    touch-action: none;
-  }
-  #mstick-left  { left: 20px; }
-  #mstick-right { right: 20px; border-color: rgba(255, 204, 74, 0.55); box-shadow: 0 0 18px rgba(255, 204, 74, 0.3); }
-  .mstick .nub {
-    position: absolute;
-    width: 58px; height: 58px;
-    top: 50%; left: 50%;
-    margin: -29px 0 0 -29px;
-    border-radius: 50%;
-    background: rgba(0, 232, 255, 0.85);
-    box-shadow: 0 0 14px rgba(0, 232, 255, 0.9);
-    pointer-events: none;
-  }
-  #mstick-right .nub { background: rgba(255, 204, 74, 0.85); box-shadow: 0 0 14px rgba(255, 204, 74, 0.9); }
-  .mbtn {
-    position: fixed;
-    width: 72px; height: 72px;
-    border-radius: 50%;
-    background: rgba(0, 232, 255, 0.13);
-    border: 2px solid rgba(0, 232, 255, 0.7);
-    color: #00e8ff;
-    font-family: 'Press Start 2P', ui-monospace, monospace;
-    font-size: 12px; font-weight: bold;
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 0 14px rgba(0, 232, 255, 0.4);
-    z-index: 15;
-    touch-action: none;
-    user-select: none;
-    letter-spacing: 0.05em;
-  }
-  .mbtn.pressed { background: rgba(0, 232, 255, 0.45); transform: scale(0.94); }
-  /* Action (E) = green */
-  #mbtn-action { right: 180px; bottom: 176px;
-    background: rgba(127, 255, 110, 0.15);
-    border-color: rgba(127, 255, 110, 0.8);
-    color: #7fff70;
-    box-shadow: 0 0 14px rgba(127, 255, 110, 0.4);
-  }
-  #mbtn-action.pressed { background: rgba(127, 255, 110, 0.45); }
-  /* Jump (space) */
-  #mbtn-jump { right: 92px; bottom: 176px; }
-  /* Run (shift) */
-  #mbtn-run  { right: 180px; bottom: 84px;
-    background: rgba(255, 204, 74, 0.13);
-    border-color: rgba(255, 204, 74, 0.7);
-    color: #ffcc4a;
-    box-shadow: 0 0 14px rgba(255, 204, 74, 0.35);
-  }
-  #mbtn-run.pressed { background: rgba(255, 204, 74, 0.45); }
-  /* Pause (top-right) */
-  #mbtn-pause {
-    right: 16px; top: 16px; bottom: auto;
-    width: 52px; height: 52px;
-    font-size: 18px;
-    background: rgba(255,255,255,0.1);
-    border-color: rgba(255,255,255,0.5);
-    color: #e6edf3;
-    box-shadow: 0 0 10px rgba(255,255,255,0.2);
-  }
-  /* Mute toggle (top-right next to pause) */
-  #mbtn-mute {
-    right: 76px; top: 16px; bottom: auto;
-    width: 52px; height: 52px;
-    font-size: 18px;
-    background: rgba(255,255,255,0.1);
-    border-color: rgba(255,255,255,0.5);
-    color: #e6edf3;
-    box-shadow: 0 0 10px rgba(255,255,255,0.2);
-  }
 
   /* Minimap for the Android experience */
   #minimap {
@@ -352,16 +266,6 @@
   <!-- Minimap for Android experience (canvas filled via JS) -->
   <canvas id="minimap" width="220" height="220"></canvas>
   <div id="minimap-label">destino: — m</div>
-
-  <div id="mobile-controls">
-    <div class="mstick" id="mstick-left"><div class="nub"></div></div>
-    <div class="mstick" id="mstick-right"><div class="nub"></div></div>
-    <div class="mbtn" id="mbtn-action">E</div>
-    <div class="mbtn" id="mbtn-jump">JUMP</div>
-    <div class="mbtn" id="mbtn-run">RUN</div>
-    <div class="mbtn" id="mbtn-pause">II</div>
-    <div class="mbtn" id="mbtn-mute">M</div>
-  </div>
 
   <div id="boni-splash" class="modal show">
     <div class="panel">
