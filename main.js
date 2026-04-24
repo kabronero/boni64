@@ -162,11 +162,11 @@ function loadLevel(levelFactory) {
 
 // ---------- Reusable visual helpers ----------
 
-function neonBox(group, walls, x, z, size = 2, h = 1, edgeColor = 0x00e8ff, collide = true) {
+function neonBox(group, walls, x, z, size = 2, h = 1, edgeColor = 0x00e8ff, collide = true, bodyColor = 0x0a0e14) {
   const g = new THREE.BoxGeometry(size, h, size);
   const body = new THREE.Mesh(
     g,
-    new THREE.MeshStandardMaterial({ color: 0x0a0e14, roughness: 0.55, metalness: 0.4 })
+    new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.55, metalness: 0.4 })
   );
   body.position.set(x, h / 2, z);
   body.castShadow = true;
@@ -636,7 +636,7 @@ function showSplashModal(game) {
     h1.innerHTML = 'ANDRÓID ES<br>UNA MIERDA';
     h1.style.color = '#7aff88';
     h1.style.textShadow = '0 0 14px rgba(122,255,136,.7)';
-    p.innerHTML = 'boni quiere volver al hotel desde el bar.<br>el GPS dice que es por acá. spoiler: no.<br><b>E</b> para tirar el celular · <b>P</b> para pausar';
+    p.innerHTML = '<b>E</b> tirar el celular · <b>P</b> pausa';
   } else {
     h1.innerHTML = 'DAME MI GALLETITA<br>Y ME VOY';
     h1.style.color = '#ffcc4a';
@@ -766,18 +766,18 @@ function makePhoneMesh() {
   const g = new THREE.Group();
   g.userData.isPhone = true;
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.32, 0.64, 0.07),
+    new THREE.BoxGeometry(0.55, 1.1, 0.12),
     new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.35, metalness: 0.55 })
   );
   g.add(body);
   const screen = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.28, 0.56),
+    new THREE.PlaneGeometry(0.48, 0.98),
     new THREE.MeshStandardMaterial({
-      color: 0x0a3a10, emissive: 0x3dff55, emissiveIntensity: 1.5,
+      color: 0x0a3a10, emissive: 0x5dff77, emissiveIntensity: 2.4,
       roughness: 0.6,
     })
   );
-  screen.position.z = 0.038;
+  screen.position.z = 0.065;
   g.add(screen);
   return g;
 }
@@ -807,8 +807,11 @@ function updatePhoneInHand() {
   phone.mesh.position.copy(p);
   phone.mesh.quaternion.copy(q);
   // Small offset so the phone sits in the palm area
-  phone.mesh.translateY(-0.25);
-  phone.mesh.translateZ(0.05);
+  // The R_Hand bone's local +Y typically points down the palm, so offset
+  // the phone downward in hand-space and tilt it so the screen faces outward.
+  phone.mesh.translateY(-0.45);
+  phone.mesh.translateZ(0.1);
+  phone.mesh.rotateX(Math.PI / 2);
 }
 
 function throwPhone() {
@@ -842,24 +845,51 @@ function shatterPhoneAt(pos) {
     phone.flying = null;
   }
   const shardMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0a0a, emissive: 0x3dff55, emissiveIntensity: 0.8,
+    color: 0x0a0a0a, emissive: 0x3dff55, emissiveIntensity: 1.0,
     roughness: 0.4, metalness: 0.3,
   });
-  for (let i = 0; i < 10; i++) {
-    const s = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.02), shardMat);
-    s.position.copy(pos);
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0x66ff77, emissive: 0x99ff99, emissiveIntensity: 2.0,
+    roughness: 0.2, metalness: 0.2,
+  });
+  // Big burst: 30 body shards + 15 bright glass flakes
+  for (let i = 0; i < 30; i++) {
+    const sz = 0.06 + Math.random() * 0.12;
+    const s = new THREE.Mesh(new THREE.BoxGeometry(sz, sz * 0.6, sz * 0.3), shardMat);
+    s.position.copy(pos).add(new THREE.Vector3(
+      (Math.random() - 0.5) * 0.3,
+      (Math.random() - 0.5) * 0.3,
+      (Math.random() - 0.5) * 0.3,
+    ));
     const vel = new THREE.Vector3(
-      (Math.random() - 0.5) * 6,
-      Math.random() * 5 + 2,
-      (Math.random() - 0.5) * 6,
+      (Math.random() - 0.5) * 14,
+      Math.random() * 10 + 3,
+      (Math.random() - 0.5) * 14,
     );
     const angVel = new THREE.Vector3(
-      (Math.random() - 0.5) * 20,
-      (Math.random() - 0.5) * 20,
-      (Math.random() - 0.5) * 20,
+      (Math.random() - 0.5) * 40,
+      (Math.random() - 0.5) * 40,
+      (Math.random() - 0.5) * 40,
     );
     scene.add(s);
-    phone.particles.push({ mesh: s, vel, angVel, lifeLeft: 1.5 });
+    phone.particles.push({ mesh: s, vel, angVel, lifeLeft: 2.2 });
+  }
+  for (let i = 0; i < 15; i++) {
+    const sz = 0.03 + Math.random() * 0.08;
+    const s = new THREE.Mesh(new THREE.BoxGeometry(sz, sz, 0.01), glassMat);
+    s.position.copy(pos);
+    const vel = new THREE.Vector3(
+      (Math.random() - 0.5) * 20,
+      Math.random() * 14 + 4,
+      (Math.random() - 0.5) * 20,
+    );
+    const angVel = new THREE.Vector3(
+      (Math.random() - 0.5) * 60,
+      (Math.random() - 0.5) * 60,
+      (Math.random() - 0.5) * 60,
+    );
+    scene.add(s);
+    phone.particles.push({ mesh: s, vel, angVel, lifeLeft: 2.0 });
   }
 }
 
@@ -977,70 +1007,61 @@ function minimapDraw() {
   const s = minimap.scale;
   const bx = character.root.position.x;
   const bz = character.root.position.z;
-  // Streets (light thin lines for block edges)
+  const dest = levelState.data.destination;
   const city = levelState.data.cityMeta;
+
+  // Player-aligned: rotate the whole map so Boni's forward is "up" on canvas.
+  // Arrow stays upright in the center; streets and destination rotate around.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-character.facing);
+
+  // City block rects in character-relative coords. (dx, -dz) maps world +Z to
+  // canvas up (-y).
   if (city) {
-    ctx.strokeStyle = 'rgba(40,120,60,0.45)';
-    ctx.lineWidth = 1;
-    const { origin, span, step } = city;
-    for (let i = 0; i <= span; i++) {
-      const worldX = origin + i * step;
-      const px = cx + (worldX - bx) * s;
-      if (px >= 0 && px <= w) {
-        ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
-      }
-      const worldZ = origin + i * step;
-      // +Z world maps to UP (-y) on canvas so the map reads north-up
-      const py = cy - (worldZ - bz) * s;
-      if (py >= 0 && py <= h) {
-        ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
-      }
-    }
-    // City blocks as dark rects
-    ctx.fillStyle = 'rgba(30,60,35,0.7)';
+    ctx.fillStyle = 'rgba(90,150,110,0.85)';
+    const half = Math.max(w, h);
     for (const bl of city.blocks) {
-      const px = cx + (bl.x - bx) * s;
-      const py = cy - (bl.z - bz) * s;
+      const dx = (bl.x - bx) * s;
+      const dz = (bl.z - bz) * s;
+      if (Math.abs(dx) > half || Math.abs(dz) > half) continue;
       const hs = (bl.size / 2) * s;
-      if (px + hs < 0 || px - hs > w || py + hs < 0 || py - hs > h) continue;
-      ctx.fillRect(px - hs, py - hs, hs * 2, hs * 2);
+      ctx.fillRect(dx - hs, -dz - hs, hs * 2, hs * 2);
     }
   }
-  // Destination with pulse
-  const dest = levelState.data.destination;
+
+  // Destination + route line
   if (dest) {
     minimap.pulse = (minimap.pulse + 0.08) % (Math.PI * 2);
     const pulseScale = 1 + Math.sin(minimap.pulse) * 0.3;
-    const dx = cx + (dest.x - bx) * s;
-    const dy = cy - (dest.z - bz) * s;
-    // Route line
-    ctx.strokeStyle = 'rgba(120,255,120,0.6)';
+    const ddx = (dest.x - bx) * s;
+    const ddz = (dest.z - bz) * s;
+    ctx.strokeStyle = 'rgba(150,255,150,0.75)';
     ctx.lineWidth = 2;
     ctx.setLineDash([6, 4]);
-    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(dx, dy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(ddx, -ddz); ctx.stroke();
     ctx.setLineDash([]);
-    // Destination dot
     ctx.fillStyle = '#7fff7f';
-    ctx.beginPath(); ctx.arc(dx, dy, 5 * pulseScale, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ddx, -ddz, 5 * pulseScale, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(127,255,127,0.5)';
-    ctx.beginPath(); ctx.arc(dx, dy, 10 * pulseScale, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ddx, -ddz, 10 * pulseScale, 0, Math.PI * 2); ctx.stroke();
   }
-  // Boni triangle in center, rotating with facing.
-  // character.facing is measured CW from +Z world (atan2(x, z)); canvas rotate
-  // is CW for positive angles, so they match directly.
-  const ang = character.facing;
+  ctx.restore();
+
+  // Boni arrow: always points up because we rotated the map instead.
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.rotate(ang);
   ctx.fillStyle = '#ff4040';
   ctx.strokeStyle = '#ffcccc';
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(0, -8);
-  ctx.lineTo(6, 6);
-  ctx.lineTo(-6, 6);
+  ctx.moveTo(0, -10);
+  ctx.lineTo(7, 7);
+  ctx.lineTo(-7, 7);
   ctx.closePath();
   ctx.fill(); ctx.stroke();
   ctx.restore();
+
   // Distance label
   if (dest) {
     const dist = Math.sqrt((dest.x - bx) ** 2 + (dest.z - bz) ** 2);
@@ -1075,7 +1096,10 @@ function generateAndroidCity(group, state) {
       if (accent < 0.2) color = 0x7aff88; // a few bright-green landmarks
       else if (accent < 0.35) color = 0xff6a70;
       else if (accent < 0.55) color = 0x4a8aff;
-      neonBox(group, state.walls, x, z, blockSize, h, color, true);
+      // Pick a body shade that varies between a few greys/greens so the city
+      // reads well against the dark ground and fog.
+      const bodyColor = [0x2a352e, 0x2a3036, 0x373532][(ix + iz) % 3];
+      neonBox(group, state.walls, x, z, blockSize, h, color, true, bodyColor);
       blockList.push({ x, z, size: blockSize });
     }
   }
@@ -1145,10 +1169,10 @@ const androidExperience = {
     state.config.fogColor = 0x0a1a12;
     state.config.fogNear = 60;
     state.config.fogFar = 280;
-    state.config.sunColor = 0xb0ffb0;
-    state.config.sunIntensity = 0.85;
-    state.config.hemiColor = 0x4a8a60;
-    state.config.hemiIntensity = 0.9;
+    state.config.sunColor = 0xc8ffc8;
+    state.config.sunIntensity = 1.2;
+    state.config.hemiColor = 0x8aff9f;
+    state.config.hemiIntensity = 1.3;
     state.config.camDistance = 16;
     state.config.camPitch = -0.28;
     state.config.camHeightOffset = 3.6;
