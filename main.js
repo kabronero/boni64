@@ -838,48 +838,61 @@ function throwPhone() {
   if (levelState.data) levelState.data.phonesThrown = (levelState.data.phonesThrown || 0) + 1;
 }
 
-// Procedural glass-shatter: a short high-pass noise crash + a cluster of
-// quick descending tinkles. No asset file needed.
+// Procedural impact: punchy thud + a little crunch. Heavy on the low end.
 function playShatter() {
   const ctx = music.ctx;
   if (!ctx) return;
   const t0 = ctx.currentTime;
   const gainScale = isMuted ? 0 : 1;
 
-  // Noise burst ("crunch")
-  const bufSize = Math.floor(ctx.sampleRate * 0.3);
+  // Low-end thud: quick sine sweep from ~160Hz down to ~40Hz
+  const thud = ctx.createOscillator();
+  thud.type = 'sine';
+  thud.frequency.setValueAtTime(160, t0);
+  thud.frequency.exponentialRampToValueAtTime(40, t0 + 0.22);
+  const thudG = ctx.createGain();
+  thudG.gain.setValueAtTime(0.0001, t0);
+  thudG.gain.linearRampToValueAtTime(0.85 * gainScale, t0 + 0.008);
+  thudG.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+  thud.connect(thudG); thudG.connect(ctx.destination);
+  thud.start(t0); thud.stop(t0 + 0.45);
+
+  // Mid-body crunch: filtered noise with a low-pass so it stays thick
+  const bufSize = Math.floor(ctx.sampleRate * 0.25);
   const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
   const data = buf.getChannelData(0);
   for (let i = 0; i < bufSize; i++) {
-    const fade = Math.exp(-i / (bufSize * 0.18));
+    const fade = Math.exp(-i / (bufSize * 0.2));
     data[i] = (Math.random() * 2 - 1) * fade;
   }
   const noise = ctx.createBufferSource();
   noise.buffer = buf;
-  const hp = ctx.createBiquadFilter();
-  hp.type = 'highpass';
-  hp.frequency.value = 1800;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 900;
+  lp.Q.value = 0.8;
   const noiseGain = ctx.createGain();
-  noiseGain.gain.value = 0.38 * gainScale;
-  noise.connect(hp); hp.connect(noiseGain); noiseGain.connect(ctx.destination);
+  noiseGain.gain.setValueAtTime(0.0001, t0);
+  noiseGain.gain.linearRampToValueAtTime(0.45 * gainScale, t0 + 0.005);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+  noise.connect(lp); lp.connect(noiseGain); noiseGain.connect(ctx.destination);
   noise.start(t0);
 
-  // Glass tinkles: 10 short triangle chirps at random high freqs & delays
-  for (let i = 0; i < 10; i++) {
+  // Just a couple of subtle high clicks for "it's a phone, not a rock"
+  for (let i = 0; i < 2; i++) {
     const osc = ctx.createOscillator();
     osc.type = 'triangle';
-    const f0 = 1400 + Math.random() * 3600;
+    const f0 = 1600 + Math.random() * 1800;
     osc.frequency.setValueAtTime(f0, t0);
-    osc.frequency.exponentialRampToValueAtTime(f0 * 0.5, t0 + 0.35);
+    osc.frequency.exponentialRampToValueAtTime(f0 * 0.4, t0 + 0.18);
     const g = ctx.createGain();
-    const delay = Math.random() * 0.28;
-    const vol = (0.07 + Math.random() * 0.09) * gainScale;
+    const delay = 0.01 + Math.random() * 0.08;
     g.gain.setValueAtTime(0.0001, t0 + delay);
-    g.gain.linearRampToValueAtTime(vol, t0 + delay + 0.008);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + 0.22 + Math.random() * 0.2);
+    g.gain.linearRampToValueAtTime(0.045 * gainScale, t0 + delay + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + 0.18);
     osc.connect(g); g.connect(ctx.destination);
     osc.start(t0 + delay);
-    osc.stop(t0 + delay + 0.5);
+    osc.stop(t0 + delay + 0.3);
   }
 }
 
