@@ -807,13 +807,12 @@ function updatePhoneInHand() {
   phone.mesh.position.copy(p);
   phone.mesh.quaternion.copy(q);
   // Small offset so the phone sits in the palm area
-  // Sit in the palm: offset slightly along the bone's length + inward,
-  // then rotate so the phone sits flat (screen up toward the camera side).
-  phone.mesh.translateY(-0.18);
-  phone.mesh.translateX(0.08);
-  phone.mesh.translateZ(0.05);
-  phone.mesh.rotateZ(Math.PI / 2);
-  phone.mesh.rotateX(Math.PI / 2);
+  // Sit upright in the palm, long axis along the forearm.
+  // Offset in hand-local: further down the bone (palm/fingers area), a bit
+  // forward, almost no side offset. No extra rotations so the phone stays
+  // aligned with the hand (portrait-vertical).
+  phone.mesh.translateY(-0.35);
+  phone.mesh.translateZ(0.08);
 }
 
 function throwPhone() {
