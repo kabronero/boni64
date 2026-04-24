@@ -766,18 +766,18 @@ function makePhoneMesh() {
   const g = new THREE.Group();
   g.userData.isPhone = true;
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.16, 0.018),
+    new THREE.BoxGeometry(0.32, 0.64, 0.07),
     new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.35, metalness: 0.55 })
   );
   g.add(body);
   const screen = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.07, 0.13),
+    new THREE.PlaneGeometry(0.28, 0.56),
     new THREE.MeshStandardMaterial({
       color: 0x0a3a10, emissive: 0x3dff55, emissiveIntensity: 1.5,
       roughness: 0.6,
     })
   );
-  screen.position.z = 0.01;
+  screen.position.z = 0.038;
   g.add(screen);
   return g;
 }
@@ -807,8 +807,8 @@ function updatePhoneInHand() {
   phone.mesh.position.copy(p);
   phone.mesh.quaternion.copy(q);
   // Small offset so the phone sits in the palm area
-  phone.mesh.translateY(-0.05);
-  phone.mesh.translateZ(0.03);
+  phone.mesh.translateY(-0.25);
+  phone.mesh.translateZ(0.05);
 }
 
 function throwPhone() {
@@ -990,7 +990,8 @@ function minimapDraw() {
         ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
       }
       const worldZ = origin + i * step;
-      const py = cy + (worldZ - bz) * s;
+      // +Z world maps to UP (-y) on canvas so the map reads north-up
+      const py = cy - (worldZ - bz) * s;
       if (py >= 0 && py <= h) {
         ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
       }
@@ -999,7 +1000,7 @@ function minimapDraw() {
     ctx.fillStyle = 'rgba(30,60,35,0.7)';
     for (const bl of city.blocks) {
       const px = cx + (bl.x - bx) * s;
-      const py = cy + (bl.z - bz) * s;
+      const py = cy - (bl.z - bz) * s;
       const hs = (bl.size / 2) * s;
       if (px + hs < 0 || px - hs > w || py + hs < 0 || py - hs > h) continue;
       ctx.fillRect(px - hs, py - hs, hs * 2, hs * 2);
@@ -1011,7 +1012,7 @@ function minimapDraw() {
     minimap.pulse = (minimap.pulse + 0.08) % (Math.PI * 2);
     const pulseScale = 1 + Math.sin(minimap.pulse) * 0.3;
     const dx = cx + (dest.x - bx) * s;
-    const dy = cy + (dest.z - bz) * s;
+    const dy = cy - (dest.z - bz) * s;
     // Route line
     ctx.strokeStyle = 'rgba(120,255,120,0.6)';
     ctx.lineWidth = 2;
@@ -1024,8 +1025,10 @@ function minimapDraw() {
     ctx.strokeStyle = 'rgba(127,255,127,0.5)';
     ctx.beginPath(); ctx.arc(dx, dy, 10 * pulseScale, 0, Math.PI * 2); ctx.stroke();
   }
-  // Boni triangle in center, rotating with facing
-  const ang = -character.facing;
+  // Boni triangle in center, rotating with facing.
+  // character.facing is measured CW from +Z world (atan2(x, z)); canvas rotate
+  // is CW for positive angles, so they match directly.
+  const ang = character.facing;
   ctx.save();
   ctx.translate(cx, cy);
   ctx.rotate(ang);
@@ -1136,22 +1139,23 @@ function updateAndroidGps(state, dt) {
 const androidExperience = {
   name: 'android',
   setup(group, state) {
-    state.config.title = 'ANDRÓID ES UNA MIERDA';
-    state.config.bgColor = 0x020608;
-    state.config.fogColor = 0x020608;
-    state.config.fogNear = 40;
-    state.config.fogFar = 180;
-    state.config.sunColor = 0x7aff88;
-    state.config.sunIntensity = 0.35;
-    state.config.hemiColor = 0x0a2418;
-    state.config.hemiIntensity = 0.5;
+    // No intro banner — just drop the player in
+    state.config.title = '';
+    state.config.bgColor = 0x0a1a12;
+    state.config.fogColor = 0x0a1a12;
+    state.config.fogNear = 60;
+    state.config.fogFar = 280;
+    state.config.sunColor = 0xb0ffb0;
+    state.config.sunIntensity = 0.85;
+    state.config.hemiColor = 0x4a8a60;
+    state.config.hemiIntensity = 0.9;
     state.config.camDistance = 16;
     state.config.camPitch = -0.28;
     state.config.camHeightOffset = 3.6;
     state.config.spawn.set(0, 0, 0);
 
-    groundPlane(group, 0x050a06);
-    neonGrid(group, 500, 100, 0x3aff66, 0x1a6020, 0.35);
+    groundPlane(group, 0x121a12);
+    neonGrid(group, 500, 100, 0x5aff88, 0x2a9040, 0.55);
 
     state.data.cityMeta = generateAndroidCity(group, state);
     state.data.phonesThrown = 0;
