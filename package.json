@@ -8,6 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:lite": "npx --yes @gltf-transform/cli@4 optimize boni.glb viewer/downloads/boni-lite.glb --compress false --texture-compress false --simplify true --simplify-ratio 0.06 --simplify-error 0.004 --join false --instance false --palette false --flatten false"
   }
 }

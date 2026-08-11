@@ -102,10 +102,13 @@ const server = http.createServer((req, res) => {
   }
 
   // Static file
-  let p = url.pathname;
-  if (p === '/') p = '/index.html';
-  const filePath = path.resolve(ROOT, '.' + p);
+  const p = url.pathname;
+  let filePath = path.resolve(ROOT, '.' + p);
   if (!filePath.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
+  // Directory (or bare "/") -> index.html inside it, so /viewer/ works too.
+  if (p.endsWith('/') || (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory())) {
+    filePath = path.join(filePath, 'index.html');
+  }
 
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); res.end('not found'); return; }

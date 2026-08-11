@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>Boni — Model Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #05080d;
+    --panel: rgba(8, 14, 22, .82);
+    --line: rgba(0, 232, 255, .22);
+    --line-hot: rgba(0, 232, 255, .7);
+    --cyan: #00e8ff;
+    --cyan-dim: #7fd3ff;
+    --text: #dfe9f2;
+    --muted: #7c8fa3;
+    --panel-w: 320px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: ui-monospace, 'SF Mono', 'Courier New', monospace;
+    -webkit-text-size-adjust: 100%;
+  }
+  canvas { display: block; touch-action: none; }
+
+  /* ---------- loading ---------- */
+  #loader {
+    position: fixed; inset: 0; z-index: 50;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    background: radial-gradient(circle at 50% 45%, #0a1420, #04070b 70%);
+    transition: opacity .5s; text-align: center; padding: 20px;
+  }
+  #loader.gone { opacity: 0; pointer-events: none; }
+  #loader h1 {
+    font-family: 'Press Start 2P', monospace; font-size: 20px; margin: 0;
+    color: var(--cyan); text-shadow: 0 0 18px rgba(0,232,255,.55); letter-spacing: 1px;
+  }
+  #loader .bar { width: min(320px, 70vw); height: 6px; background: rgba(255,255,255,.08); border-radius: 99px; overflow: hidden; }
+  #loader .bar i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg, #007c99, var(--cyan)); box-shadow: 0 0 12px var(--cyan); transition: width .18s; }
+  #loader .pct { font-size: 12px; color: var(--muted); letter-spacing: .1em; }
+
+  /* ---------- panel ---------- */
+  #panel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: var(--panel-w); z-index: 20;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border-left: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    transition: transform .28s ease;
+    overscroll-behavior: contain;
+  }
+  #panel.hidden { transform: translateX(100%); }
+  #panel header {
+    padding: 16px 16px 12px; border-bottom: 1px solid var(--line); flex: 0 0 auto;
+  }
+  #panel header h1 {
+    font-family: 'Press Start 2P', monospace; font-size: 12px; margin: 0 0 8px;
+    color: var(--cyan); text-shadow: 0 0 12px rgba(0,232,255,.5);
+  }
+  #panel header .sub { font-size: 10px; color: var(--muted); line-height: 1.6; letter-spacing: .04em; }
+  #scroll { flex: 1 1 auto; overflow-y: auto; padding: 4px 16px 90px; }
+
+  .group { margin-top: 18px; }
+  .group > h2 {
+    font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--cyan-dim); margin: 0 0 9px; opacity: .85;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .group > h2::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  /* animation buttons */
+  #clips { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .clip {
+    appearance: none; text-align: left; cursor: pointer;
+    background: rgba(255,255,255,.035); color: var(--text);
+    border: 1px solid rgba(255,255,255,.09); border-radius: 5px;
+    padding: 7px 8px; font: inherit; font-size: 11px; line-height: 1.25;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .clip:hover { background: rgba(0,232,255,.1); border-color: var(--line-hot); }
+  .clip .d { display: block; font-size: 9px; color: var(--muted); margin-top: 3px; }
+  .clip.active {
+    background: rgba(0,232,255,.16); border-color: var(--cyan); color: #fff;
+    box-shadow: 0 0 0 1px rgba(0,232,255,.35), 0 0 14px rgba(0,232,255,.2) inset;
+  }
+  .clip.active .d { color: var(--cyan-dim); }
+
+  /* rows */
+  .row { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 11px; }
+  .row label { flex: 1 1 auto; color: var(--muted); }
+  .row .val { font-size: 10px; color: var(--cyan-dim); min-width: 34px; text-align: right; }
+
+  .btnrow { display: flex; gap: 6px; }
+  button.b {
+    flex: 1; cursor: pointer; font: inherit; font-size: 11px; padding: 7px 6px;
+    background: rgba(255,255,255,.05); color: var(--text);
+    border: 1px solid rgba(255,255,255,.12); border-radius: 5px;
+    transition: background .12s, border-color .12s;
+  }
+  button.b:hover { background: rgba(0,232,255,.12); border-color: var(--line-hot); }
+  button.b.on { background: rgba(0,232,255,.18); border-color: var(--cyan); color: #fff; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; background: transparent;
+    flex: 1 1 auto; height: 16px; margin: 0; cursor: pointer; min-width: 0;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; background: rgba(255,255,255,.16); border-radius: 99px; }
+  input[type=range]::-moz-range-track { height: 3px; background: rgba(255,255,255,.16); border-radius: 99px; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4.5px;
+    border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px rgba(0,232,255,.8); border: none;
+  }
+  input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border: none; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px rgba(0,232,255,.8); }
+
+  /* switches */
+  .sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 11px; cursor: pointer; user-select: none; }
+  .sw span { color: var(--muted); }
+  .sw i {
+    flex: 0 0 auto; width: 30px; height: 16px; border-radius: 99px; position: relative;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.14); transition: background .15s, border-color .15s;
+  }
+  .sw i::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%;
+    background: #90a4b8; transition: transform .15s, background .15s;
+  }
+  .sw.on i { background: rgba(0,232,255,.3); border-color: var(--cyan); }
+  .sw.on i::after { transform: translateX(14px); background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+  .sw.on span { color: var(--text); }
+
+  /* download */
+  a.dl {
+    display: block; text-decoration: none; color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 10px 11px; margin-bottom: 8px;
+    background: linear-gradient(180deg, rgba(0,232,255,.07), rgba(0,232,255,.02));
+    transition: border-color .14s, background .14s;
+  }
+  a.dl:hover { border-color: var(--cyan); background: rgba(0,232,255,.12); }
+  a.dl b { display: block; font-size: 12px; color: var(--cyan); margin-bottom: 3px; }
+  a.dl small { display: block; font-size: 10px; color: var(--muted); line-height: 1.55; }
+  a.dl .tag { float: right; font-size: 9px; color: var(--cyan-dim); border: 1px solid var(--line); border-radius: 99px; padding: 1px 6px; }
+  .note { font-size: 10px; color: var(--muted); line-height: 1.65; margin-top: 4px; }
+  .note code { color: var(--cyan-dim); }
+
+  /* stats + toggle button */
+  #stats {
+    position: fixed; left: 12px; bottom: 12px; z-index: 15;
+    font-size: 10px; color: var(--muted); line-height: 1.7;
+    background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.07);
+    border-radius: 6px; padding: 8px 10px; pointer-events: none; letter-spacing: .04em;
+  }
+  #stats b { color: var(--cyan-dim); font-weight: normal; }
+  #hint {
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 15;
+    font-size: 10px; color: var(--muted); background: rgba(0,0,0,.4);
+    border-radius: 99px; padding: 6px 14px; pointer-events: none;
+    transition: opacity .6s; letter-spacing: .05em;
+  }
+  #toggle {
+    position: fixed; top: 12px; right: 12px; z-index: 30;
+    width: 38px; height: 38px; border-radius: 8px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--line); color: var(--cyan);
+    font-size: 16px; line-height: 1; display: none;
+    align-items: center; justify-content: center; backdrop-filter: blur(10px);
+  }
+  body.panel-hidden #toggle { display: flex; }
+  #close {
+    position: absolute; top: 12px; right: 12px;
+    width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+    background: transparent; border: 1px solid var(--line); color: var(--cyan-dim);
+    font: inherit; font-size: 13px; line-height: 1; padding: 0;
+  }
+  #close:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  /* timeline */
+  #timeline { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  #time-label { font-size: 10px; color: var(--muted); min-width: 62px; text-align: right; letter-spacing: .02em; }
+
+  @media (max-width: 720px) {
+    :root { --panel-w: 100%; }
+    #panel { width: min(100%, 360px); }
+    #toggle { display: flex; }
+    #stats { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <h1>BONI</h1>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="pct" id="pct">cargando modelo…</div>
+</div>
+
+<button id="toggle" title="Mostrar panel">☰</button>
+
+<aside id="panel">
+  <header>
+    <button id="close" title="Ocultar panel (H)">✕</button>
+    <h1>BONI VIEWER</h1>
+    <div class="sub">Arrastrá para girar 360° · rueda para zoom · click derecho para desplazar</div>
+  </header>
+
+  <div id="scroll">
+
+    <div class="group">
+      <h2>Animaciones</h2>
+      <div id="clips"></div>
+    </div>
+
+    <div class="group">
+      <h2>Reproducción</h2>
+      <div class="btnrow">
+        <button class="b" id="btn-play">⏸ Pausar</button>
+        <button class="b on" id="btn-loop">🔁 Loop</button>
+      </div>
+      <div id="timeline">
+        <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" />
+        <span id="time-label">0.00 / 0.00</span>
+      </div>
+      <div class="row">
+        <label>Velocidad</label>
+        <input type="range" id="speed" min="0" max="2" step="0.05" value="1" />
+        <span class="val" id="speed-val">1.00×</span>
+      </div>
+      <label class="sw" id="sw-rootmotion"><span>Root motion (desplazamiento)</span><i></i></label>
+    </div>
+
+    <div class="group">
+      <h2>Cámara</h2>
+      <div class="btnrow" style="margin-bottom:6px">
+        <button class="b" data-view="front">Frente</button>
+        <button class="b" data-view="side">Perfil</button>
+        <button class="b" data-view="back">Espalda</button>
+      </div>
+      <div class="btnrow">
+        <button class="b" data-view="face">Cara</button>
+        <button class="b" data-view="reset">Reset</button>
+      </div>
+      <label class="sw" id="sw-spin"><span>Giro automático 360°</span><i></i></label>
+      <div class="row">
+        <label>Velocidad giro</label>
+        <input type="range" id="spin-speed" min="-6" max="6" step="0.2" value="1.4" />
+        <span class="val" id="spin-val">1.4</span>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Vista</h2>
+      <label class="sw on" id="sw-grid"><span>Grilla</span><i></i></label>
+      <label class="sw on" id="sw-shadow"><span>Sombra en el piso</span><i></i></label>
+      <label class="sw" id="sw-wire"><span>Wireframe</span><i></i></label>
+      <label class="sw" id="sw-bones"><span>Esqueleto</span><i></i></label>
+      <div class="row">
+        <label>Glow (emisivo)</label>
+        <input type="range" id="glow" min="0" max="1" step="0.05" value="0" />
+        <span class="val" id="glow-val">0.00</span>
+      </div>
+      <div class="row">
+        <label>Luz</label>
+        <input type="range" id="expo" min="0.4" max="2.5" step="0.05" value="1" />
+        <span class="val" id="expo-val">1.00</span>
+      </div>
+      <div class="btnrow" style="margin-top:8px">
+        <button class="b" data-bg="dark">Oscuro</button>
+        <button class="b" data-bg="studio">Estudio</button>
+        <button class="b" data-bg="tron">TRON</button>
+      </div>
+      <div class="btnrow" style="margin-top:6px">
+        <button class="b" id="btn-shot">📸 Captura PNG</button>
+      </div>
+      <label class="sw" id="sw-quality"><span>Malla original (38 MB)</span><i></i></label>
+    </div>
+
+    <div class="group">
+      <h2>Descargar modelo</h2>
+      <a class="dl" id="dl-lite" href="./downloads/boni-lite.glb" download="boni-lite.glb">
+        <span class="tag" id="size-lite">—</span>
+        <b>boni-lite.glb</b>
+        <small>Recomendado para juegos. Malla optimizada, mismo esqueleto y las 11 animaciones.</small>
+      </a>
+      <a class="dl" id="dl-full" href="../boni.glb" download="boni.glb">
+        <span class="tag" id="size-full">—</span>
+        <b>boni.glb</b>
+        <small>Original sin optimizar, máximo detalle. Pesado para tiempo real.</small>
+      </a>
+      <p class="note">
+        <b style="color:var(--cyan-dim)">¿Qué formato es?</b><br>
+        <code>.glb</code> = glTF 2.0 binario, el estándar abierto para 3D en tiempo real.
+        Un solo archivo con malla, esqueleto, animaciones y textura adentro.<br><br>
+        <b style="color:var(--cyan-dim)">Cómo se importa</b><br>
+        · <b>Godot 4</b>: arrastrar el .glb al proyecto.<br>
+        · <b>Unity</b>: paquete <code>glTFast</code> o <code>UniGLTF</code>.<br>
+        · <b>Unreal 5</b>: File → Import (glTF nativo).<br>
+        · <b>Blender</b>: File → Import → glTF 2.0.<br>
+        · <b>three.js / Babylon / PlayCanvas</b>: soporte nativo.<br><br>
+        Las animaciones vienen como clips <code>NlaTrack.00X</code> — los nombres legibles están en la lista de arriba.
+      </p>
+    </div>
+
+  </div>
+</aside>
+
+<div id="stats"></div>
+<div id="hint">arrastrá para girar · rueda para zoom</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./viewer.js"></script>
+</body>
+</html>
